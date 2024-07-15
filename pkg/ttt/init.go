@@ -1,5 +1,5 @@
 package ttt
 
 var (
-	debug = true
+	debug = false
 )
