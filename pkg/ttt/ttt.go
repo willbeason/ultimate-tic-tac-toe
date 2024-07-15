@@ -271,7 +271,7 @@ func PickMove(moves []Move, game *Game, depth int) Move {
 
 	for i, move := range moves {
 		if debug {
-			fmt.Fprintf(os.Stderr, "%d/%d: %s", i, len(moves), move)
+			_, _ = fmt.Fprintf(os.Stderr, "%d/%d: %s", i, len(moves), move)
 		}
 
 		a := move.XBoard()
@@ -284,7 +284,7 @@ func PickMove(moves []Move, game *Game, depth int) Move {
 			choice = move
 			value = math.Inf(1.0)
 			game.WithoutMove(a, b, x, y, Self, winsBoard)
-			fmt.Fprintln(os.Stderr, "Wins game")
+			_, _ = fmt.Fprintln(os.Stderr, "Wins game")
 			break
 		}
 
@@ -301,9 +301,9 @@ func PickMove(moves []Move, game *Game, depth int) Move {
 		}
 
 		if debug {
-			fmt.Fprintf(os.Stderr, ": %f\n", moveValue)
+			_, _ = fmt.Fprintf(os.Stderr, ": %f\n", moveValue)
 			if winsBoard {
-				fmt.Fprintln(os.Stderr, "Wins board")
+				_, _ = fmt.Fprintln(os.Stderr, "Wins board")
 			}
 		}
 	}
