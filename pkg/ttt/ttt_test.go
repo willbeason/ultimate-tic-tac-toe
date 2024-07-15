@@ -35,11 +35,11 @@ var startingGame = &Game{
 func NewBoard(start *Board) *ttt.Board {
 	b := &ttt.Board{}
 
-	for xCell := int8(0); xCell < 3; xCell++ {
-		for yCell := int8(0); yCell < 3; yCell++ {
+	for xCell := uint8(0); xCell < 3; xCell++ {
+		for yCell := uint8(0); yCell < 3; yCell++ {
 			owner := start[xCell][yCell]
 			if owner != ttt.None {
-				b.WithMove(ttt.Move{X: xCell, Y: yCell}, owner)
+				b.WithMove(xCell, yCell, owner)
 			}
 		}
 	}
@@ -53,13 +53,13 @@ func NewGame(start [3][3]*Board) *ttt.Game {
 		Winners: &ttt.Board{},
 	}
 
-	for xBoard := int8(0); xBoard < 3; xBoard++ {
-		for yBoard := int8(0); yBoard < 3; yBoard++ {
-			for xCell := int8(0); xCell < 3; xCell++ {
-				for yCell := int8(0); yCell < 3; yCell++ {
+	for xBoard := uint8(0); xBoard < 3; xBoard++ {
+		for yBoard := uint8(0); yBoard < 3; yBoard++ {
+			for xCell := uint8(0); xCell < 3; xCell++ {
+				for yCell := uint8(0); yCell < 3; yCell++ {
 					owner := start[xBoard][yBoard][xCell][yCell]
 					if owner != ttt.None {
-						g.WithMove([2]ttt.Move{{X: xBoard, Y: yBoard}, {X: xCell, Y: yCell}}, owner)
+						g.WithMove(xBoard, yBoard, xCell, yCell, owner)
 					}
 				}
 			}
@@ -71,30 +71,30 @@ func NewGame(start [3][3]*Board) *ttt.Game {
 
 func BenchmarkPickMove(b *testing.B) {
 	startingGame2 := NewGame(startingGame.Boards)
-	moves := make([][2]ttt.Move, 81)
-	nMoves := startingGame2.LegalMoves(ttt.Move{X: 2, Y: 0}, moves)
+	moves := make([]ttt.Move, 81)
+	nMoves := startingGame2.LegalMoves(2, 0, moves)
 	moves = moves[:nMoves]
 
 	for i := 0; i < b.N; i++ {
-		_ = ttt.PickMove(moves[:nMoves], startingGame2, 6)
+		_ = ttt.PickMove(moves[:nMoves], startingGame2, 4)
 	}
 }
 
 func BenchmarkLegalMoves(b *testing.B) {
 	startingGame2 := NewGame(startingGame.Boards)
-	moves := make([][2]ttt.Move, 81)
+	moves := make([]ttt.Move, 81)
 
 	for i := 0; i < b.N; i++ {
-		_ = startingGame2.LegalMoves(ttt.Move{X: 2, Y: 0}, moves)
+		_ = startingGame2.LegalMoves(2, 0, moves)
 	}
 }
 
-func BenchmarkBoard_WithMove2(b *testing.B) {
+func BenchmarkBoard_WithMove(b *testing.B) {
 	board := &ttt.Board{}
 
 	for i := 0; i < b.N; i++ {
-		_ = board.WithMove(ttt.Move{X: 0, Y: 0}, ttt.Self)
-		board.WithoutMove(ttt.Move{X: 0, Y: 0}, ttt.Self)
+		_ = board.WithMove(0, 0, ttt.Self)
+		board.WithoutMove(0, 0, ttt.Self)
 	}
 }
 
@@ -128,7 +128,7 @@ func TestMinimax(t *testing.T) {
 			}),
 			depth:    1,
 			player:   ttt.Self,
-			lastMove: ttt.Move{X: 0, Y: 0},
+			lastMove: ttt.ToMove(0, 0, 0, 0),
 			wantEval: math.Inf(1.0),
 		},
 	}
@@ -150,7 +150,7 @@ func TestPickMove(t *testing.T) {
 		depth    int
 		player   ttt.Player
 		lastMove ttt.Move
-		wantMove [2]ttt.Move
+		wantMove ttt.Move
 	}{
 		{
 			name: "obvious win game",
@@ -173,8 +173,8 @@ func TestPickMove(t *testing.T) {
 			}),
 			depth:    1,
 			player:   ttt.Self,
-			lastMove: ttt.Move{X: 0, Y: 0},
-			wantMove: [2]ttt.Move{{X: 0, Y: 0}, {X: 0, Y: 0}},
+			lastMove: ttt.ToMove(0, 0, 0, 0),
+			wantMove: ttt.ToMove(0, 0, 0, 0),
 		},
 		{
 			name: "obvious win board",
@@ -197,15 +197,17 @@ func TestPickMove(t *testing.T) {
 			}),
 			depth:    1,
 			player:   ttt.Self,
-			lastMove: ttt.Move{X: 0, Y: 0},
-			wantMove: [2]ttt.Move{{X: 0, Y: 0}, {X: 0, Y: 0}},
+			lastMove: ttt.ToMove(0, 0, 0, 0),
+			wantMove: ttt.ToMove(0, 0, 0, 0),
 		},
 	}
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			moves := make([][2]ttt.Move, 81)
-			nMoves := tc.game.LegalMoves(tc.lastMove, moves)
+			moves := make([]ttt.Move, 81)
+			a := tc.lastMove.XCell()
+			b := tc.lastMove.YCell()
+			nMoves := tc.game.LegalMoves(a, b, moves)
 			moves = moves[:nMoves]
 			got := ttt.PickMove(moves, tc.game, tc.depth)
 			if got != tc.wantMove {
@@ -222,7 +224,7 @@ func TestGame_LegalMoves(t *testing.T) {
 		depth     int
 		player    ttt.Player
 		lastMove  ttt.Move
-		wantMoves [][2]ttt.Move
+		wantMoves []ttt.Move
 	}{
 		{
 			name: "obvious win",
@@ -245,23 +247,25 @@ func TestGame_LegalMoves(t *testing.T) {
 			}),
 			depth:    1,
 			player:   ttt.Self,
-			lastMove: ttt.Move{X: 0, Y: 0},
-			wantMoves: [][2]ttt.Move{
-				{{X: 0, Y: 0}, {X: 0, Y: 0}},
-				{{X: 0, Y: 0}, {X: 1, Y: 0}},
-				{{X: 0, Y: 0}, {X: 1, Y: 1}},
-				{{X: 0, Y: 0}, {X: 1, Y: 2}},
-				{{X: 0, Y: 0}, {X: 2, Y: 0}},
-				{{X: 0, Y: 0}, {X: 2, Y: 1}},
-				{{X: 0, Y: 0}, {X: 2, Y: 2}},
+			lastMove: ttt.ToMove(0, 0, 0, 0),
+			wantMoves: []ttt.Move{
+				ttt.ToMove(0, 0, 0, 0),
+				ttt.ToMove(0, 0, 1, 0),
+				ttt.ToMove(0, 0, 1, 1),
+				ttt.ToMove(0, 0, 1, 2),
+				ttt.ToMove(0, 0, 2, 0),
+				ttt.ToMove(0, 0, 2, 1),
+				ttt.ToMove(0, 0, 2, 2),
 			},
 		},
 	}
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			moves := make([][2]ttt.Move, 81)
-			nMoves := tc.game.LegalMoves(tc.lastMove, moves)
+			moves := make([]ttt.Move, 81)
+			a := tc.lastMove.XCell()
+			b := tc.lastMove.YCell()
+			nMoves := tc.game.LegalMoves(a, b, moves)
 			moves = moves[:nMoves]
 
 			if len(moves) != len(tc.wantMoves) {
@@ -281,7 +285,6 @@ func TestBoard_LegalMoves(t *testing.T) {
 		board     *ttt.Board
 		depth     int
 		player    ttt.Player
-		lastMove  ttt.Move
 		wantMoves []ttt.Move
 	}{
 		{
@@ -289,17 +292,16 @@ func TestBoard_LegalMoves(t *testing.T) {
 			board: NewBoard(&Board{
 				{0, 1, 1}, {0, 0, 0}, {0, 0, 0},
 			}),
-			depth:    1,
-			player:   ttt.Self,
-			lastMove: ttt.Move{X: 0, Y: 0},
+			depth:  1,
+			player: ttt.Self,
 			wantMoves: []ttt.Move{
-				{X: 0, Y: 0},
-				{X: 1, Y: 0},
-				{X: 1, Y: 1},
-				{X: 1, Y: 2},
-				{X: 2, Y: 0},
-				{X: 2, Y: 1},
-				{X: 2, Y: 2},
+				ttt.ToMove(0, 0, 0, 0),
+				ttt.ToMove(0, 0, 1, 0),
+				ttt.ToMove(0, 0, 1, 1),
+				ttt.ToMove(0, 0, 1, 2),
+				ttt.ToMove(0, 0, 2, 0),
+				ttt.ToMove(0, 0, 2, 1),
+				ttt.ToMove(0, 0, 2, 2),
 			},
 		},
 	}
@@ -420,17 +422,16 @@ func TestBoard_WithMove(t *testing.T) {
 			var gotSelf [9]bool
 			var gotOpponent [9]bool
 
-			for x := int8(0); x < 3; x++ {
-				for y := int8(0); y < 3; y++ {
+			for x := uint8(0); x < 3; x++ {
+				for y := uint8(0); y < 3; y++ {
 					if tc.board.Taken[x][y] {
 						continue
 					}
 
-					move := ttt.Move{X: x, Y: y}
-					gotSelf[3*x+y] = tc.board.WithMove(move, ttt.Self)
-					tc.board.WithoutMove(move, ttt.Self)
-					gotOpponent[3*x+y] = tc.board.WithMove(move, ttt.Opponent)
-					tc.board.WithoutMove(move, ttt.Opponent)
+					gotSelf[3*x+y] = tc.board.WithMove(x, y, ttt.Self)
+					tc.board.WithoutMove(x, y, ttt.Self)
+					gotOpponent[3*x+y] = tc.board.WithMove(x, y, ttt.Opponent)
+					tc.board.WithoutMove(x, y, ttt.Opponent)
 				}
 			}
 

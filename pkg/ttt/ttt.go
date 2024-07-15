@@ -6,12 +6,39 @@ import (
 	"os"
 )
 
-type Move struct {
-	X, Y int8
-}
+type Move uint8
+
+const (
+	XBoard Move = 0b11000000
+	YBoard Move = 0b00110000
+	XCell  Move = 0b00001100
+	YCell  Move = 0b00000011
+)
 
 func (m Move) String() string {
-	return fmt.Sprintf("%d %d", m.Y, m.X)
+	x := ((m&XBoard)>>6)*3 + ((m & XCell) >> 2)
+	y := ((m&YBoard)>>4)*3 + (m & YCell)
+	return fmt.Sprintf("%d %d", y, x)
+}
+
+func ToMove(a, b, x, y uint8) Move {
+	return Move(a<<6 + b<<4 + x<<2 + y)
+}
+
+func (m Move) XBoard() uint8 {
+	return uint8(m&XBoard) >> 6
+}
+
+func (m Move) YBoard() uint8 {
+	return uint8(m&YBoard) >> 6
+}
+
+func (m Move) XCell() uint8 {
+	return uint8(m&XCell) >> 2
+}
+
+func (m Move) YCell() uint8 {
+	return uint8(m & YCell)
 }
 
 type Player = int8
@@ -29,29 +56,29 @@ type Board struct {
 	Taken     [3][3]bool
 }
 
-func (b *Board) WithMove(move Move, player Player) bool {
-	b.Taken[move.X][move.Y] = true
+func (b *Board) WithMove(x, y uint8, player Player) bool {
+	b.Taken[x][y] = true
 
 	win := false
 
-	b.Columns[move.X] += player
-	if b.Columns[move.X] == 3 || b.Columns[move.X] == -3 {
+	b.Columns[x] += player
+	if b.Columns[x] == 3 || b.Columns[x] == -3 {
 		win = true
 	}
 
-	b.Rows[move.Y] += player
-	if b.Rows[move.Y] == 3 || b.Rows[move.Y] == -3 {
+	b.Rows[y] += player
+	if b.Rows[y] == 3 || b.Rows[y] == -3 {
 		win = true
 	}
 
-	if move.X == move.Y {
+	if x == y {
 		b.Diagonals[0] += player
 		if b.Diagonals[0] == 3 || b.Diagonals[0] == -3 {
 			win = true
 		}
 	}
 
-	if move.X+move.Y == 2 {
+	if x+y == 2 {
 		b.Diagonals[1] += player
 		if b.Diagonals[1] == 3 || b.Diagonals[1] == -3 {
 			win = true
@@ -61,17 +88,17 @@ func (b *Board) WithMove(move Move, player Player) bool {
 	return win
 }
 
-func (b *Board) WithoutMove(move Move, player Player) {
-	b.Taken[move.X][move.Y] = false
+func (b *Board) WithoutMove(x, y uint8, player Player) {
+	b.Taken[x][y] = false
 
-	b.Columns[move.X] -= player
-	b.Rows[move.Y] -= player
+	b.Columns[x] -= player
+	b.Rows[y] -= player
 
-	if move.X == move.Y {
+	if x == y {
 		b.Diagonals[0] -= player
 	}
 
-	if move.X+move.Y == 2 {
+	if x+y == 2 {
 		b.Diagonals[1] -= player
 	}
 }
@@ -81,7 +108,7 @@ func (b *Board) LegalMoves(out []Move) int {
 	for x, col := range b.Taken {
 		for y, taken := range col {
 			if !taken {
-				out[nMoves] = Move{X: int8(x), Y: int8(y)}
+				out[nMoves] = Move((x << 2) + y)
 				nMoves++
 			}
 		}
@@ -94,61 +121,50 @@ type Game struct {
 	Winners *Board
 }
 
-const (
-	Cell0 = 1
-	Cell1 = Cell0 * 3
-	Cell2 = Cell1 * 3
-	Cell3 = Cell2 * 3
-	Cell4 = Cell3 * 3
-	Cell5 = Cell4 * 3
-	Cell6 = Cell5 * 3
-	Cell7 = Cell6 * 3
-	Cell8 = Cell7 * 3
-)
-
-var Cells = [3][3]uint16{{Cell0, Cell1, Cell2}, {Cell3, Cell4, Cell5}, {Cell6, Cell7, Cell8}}
-
-func (g *Game) WithMove(move [2]Move, player Player) (bool, bool) {
-	boardWinner := g.Boards[move[0].X][move[0].Y].WithMove(move[1], player)
+func (g *Game) WithMove(a, b, x, y uint8, player Player) (bool, bool) {
+	boardWinner := g.Boards[a][b].WithMove(x, y, player)
 	var gameWinner bool
 	if boardWinner {
-		gameWinner = g.Winners.WithMove(move[0], player)
+		gameWinner = g.Winners.WithMove(x, y, player)
 	}
 
 	return gameWinner, boardWinner
 }
 
-func (g *Game) WithoutMove(move [2]Move, player Player, wasBoardWin bool) {
-	g.Boards[move[0].X][move[0].Y].WithoutMove(move[1], player)
+func (g *Game) WithoutMove(a, b, x, y uint8, player Player, wasBoardWin bool) {
+	g.Boards[a][b].WithoutMove(x, y, player)
 
 	if wasBoardWin {
-		g.Winners.WithoutMove(move[0], player)
+		g.Winners.WithoutMove(x, y, player)
 	}
 }
 
-func (g *Game) LegalMoves(previous Move, out [][2]Move) int {
+func (g *Game) LegalMoves(x, y uint8, out []Move) int {
 	legalBoards := make([]Move, 9)
 
-	legalBoards[0] = previous
+	legalBoards[0] = Move((x << 2) + y)
 	nBoards := 1
 
-	if g.Winners.Taken[previous.X][previous.Y] {
+	if g.Winners.Taken[x][y] {
 		nBoards = g.Winners.LegalMoves(legalBoards)
 	}
 
 	moves := make([]Move, 9)
 	nLegalMoves := 0
 	for i, legalBoard := range legalBoards {
+		a := legalBoard.XCell()
+		b := legalBoard.YCell()
+
 		if i >= nBoards {
 			break
 		}
 
-		nMoves := g.Boards[legalBoard.X][legalBoard.Y].LegalMoves(moves)
+		nMoves := g.Boards[a][b].LegalMoves(moves)
 		for j, move := range moves {
 			if j >= nMoves {
 				break
 			}
-			out[nLegalMoves] = [2]Move{legalBoard, move}
+			out[nLegalMoves] = (legalBoard << 4) + move
 			nLegalMoves++
 		}
 	}
@@ -156,40 +172,51 @@ func (g *Game) LegalMoves(previous Move, out [][2]Move) int {
 	return nLegalMoves
 }
 
+func (b *Board) Score() int8 {
+	return b.Columns[0] + b.Columns[1] + b.Columns[2] + b.Rows[0] + b.Rows[1] + b.Rows[2] + b.Diagonals[0] + b.Diagonals[1]
+}
+
 func Minimax(game *Game, depth int, player Player, move Move) float64 {
 	if depth == 0 {
-		score := 0.0
-		for _, col := range game.Winners.Columns {
-			score += float64(col)
+		var score int16
+		score = int16(game.Winners.Score()) * 100
+
+		for _, row := range game.Boards {
+			for _, b := range row {
+				score += int16(b.Score())
+			}
 		}
-		for _, row := range game.Winners.Rows {
-			score += float64(row)
-		}
-		for _, diagonal := range game.Winners.Diagonals {
-			score += float64(diagonal)
-		}
-		return score
+
+		return float64(score)
 	}
 
 	var value float64
-	legalMoves := make([][2]Move, 81)
+	legalMoves := make([]Move, 81)
+	a := move.XCell()
+	b := move.YCell()
 	if player == Self {
 		// Evaluate own moves.
 		value = -100
-		nLegalMoves := game.LegalMoves(move, legalMoves)
+		nLegalMoves := game.LegalMoves(a, b, legalMoves)
 		for i, nextMove := range legalMoves {
 			if i >= nLegalMoves {
 				break
 			}
-			isWin, winsBoard := game.WithMove(nextMove, Self)
+
+			a := nextMove.XBoard()
+			b := nextMove.YBoard()
+			x := nextMove.XBoard()
+			y := nextMove.YBoard()
+
+			isWin, winsBoard := game.WithMove(a, b, x, y, Self)
 			if isWin {
 				// We can win the game.
-				game.WithoutMove(nextMove, Self, winsBoard)
+				game.WithoutMove(a, b, x, y, Self, winsBoard)
 				return math.Inf(1.0)
 			}
 
-			nextMoveValue := Minimax(game, depth-1, Opponent, nextMove[1])
-			game.WithoutMove(nextMove, Self, winsBoard)
+			nextMoveValue := Minimax(game, depth-1, Opponent, nextMove)
+			game.WithoutMove(a, b, x, y, Self, winsBoard)
 
 			if winsBoard {
 				// We can win a board.
@@ -201,20 +228,26 @@ func Minimax(game *Game, depth int, player Player, move Move) float64 {
 	} else {
 		value = math.Inf(1.0)
 		// Evaluate opponent moves.
-		nLegalMoves := game.LegalMoves(move, legalMoves)
+		nLegalMoves := game.LegalMoves(a, b, legalMoves)
 		for i, nextMove := range legalMoves {
 			if i >= nLegalMoves {
 				break
 			}
-			isWin, winsBoard := game.WithMove(nextMove, Opponent)
+
+			a := nextMove.XBoard()
+			b := nextMove.YBoard()
+			x := nextMove.XBoard()
+			y := nextMove.YBoard()
+
+			isWin, winsBoard := game.WithMove(a, b, x, y, Opponent)
 			if isWin {
-				game.WithoutMove(nextMove, Opponent, winsBoard)
+				game.WithoutMove(a, b, x, y, Opponent, winsBoard)
 				// Opponent can win the game.
 				return math.Inf(-1.0)
 			}
 
-			nextMoveValue := Minimax(game, depth-1, Self, nextMove[1])
-			game.WithoutMove(nextMove, Opponent, winsBoard)
+			nextMoveValue := Minimax(game, depth-1, Self, nextMove)
+			game.WithoutMove(a, b, x, y, Opponent, winsBoard)
 
 			if winsBoard {
 				// Opponent can win a board.
@@ -230,7 +263,7 @@ func Minimax(game *Game, depth int, player Player, move Move) float64 {
 	return value
 }
 
-func PickMove(moves [][2]Move, game *Game, depth int) [2]Move {
+func PickMove(moves []Move, game *Game, depth int) Move {
 	// Default to first valid move.
 	choice := moves[0]
 
@@ -240,17 +273,23 @@ func PickMove(moves [][2]Move, game *Game, depth int) [2]Move {
 		if debug {
 			fmt.Fprintf(os.Stderr, "%d/%d: %s", i, len(moves), move)
 		}
-		isWin, winsBoard := game.WithMove(move, Self)
+
+		a := move.XBoard()
+		b := move.YBoard()
+		x := move.XCell()
+		y := move.YCell()
+
+		isWin, winsBoard := game.WithMove(a, b, x, y, Self)
 		if isWin {
 			choice = move
 			value = math.Inf(1.0)
-			game.WithoutMove(move, Self, winsBoard)
+			game.WithoutMove(a, b, x, y, Self, winsBoard)
 			fmt.Fprintln(os.Stderr, "Wins game")
 			break
 		}
 
-		moveValue := Minimax(game, depth-1, Opponent, move[1])
-		game.WithoutMove(move, Self, winsBoard)
+		moveValue := Minimax(game, depth-1, Opponent, move)
+		game.WithoutMove(a, b, x, y, Self, winsBoard)
 
 		if winsBoard {
 			moveValue += 1.0

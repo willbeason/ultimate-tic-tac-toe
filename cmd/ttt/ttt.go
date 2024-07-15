@@ -181,7 +181,6 @@ type Game struct {
 
 func (g *Game) WithMove(move [2]Move, player Player) (bool, bool) {
 	boardWinner := g.Boards[move[0].X][move[0].Y].WithMove(move[1], player)
-
 	var gameWinner bool
 	if boardWinner {
 		gameWinner = g.Winners.WithMove(move[0], player)
@@ -228,19 +227,22 @@ func (g *Game) LegalMoves(previous Move, out [][2]Move) int {
 	return nLegalMoves
 }
 
+func (b *Board) Score() int8 {
+	return b.Columns[0] + b.Columns[1] + b.Columns[2] + b.Rows[0] + b.Rows[1] + b.Rows[2] + b.Diagonals[0] + b.Diagonals[1]
+}
+
 func Minimax(game *Game, depth int, player Player, move Move) float64 {
 	if depth == 0 {
-		score := 0.0
-		for _, col := range game.Winners.Columns {
-			score += float64(col)
+		var score int16
+		score = int16(game.Winners.Score()) * 100
+
+		for _, row := range game.Boards {
+			for _, b := range row {
+				score += int16(b.Score())
+			}
 		}
-		for _, row := range game.Winners.Rows {
-			score += float64(row)
-		}
-		for _, diagonal := range game.Winners.Diagonals {
-			score += float64(diagonal)
-		}
-		return score
+
+		return float64(score)
 	}
 
 	var value float64
