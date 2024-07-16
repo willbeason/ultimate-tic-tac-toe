@@ -76,7 +76,7 @@ func BenchmarkPickMove(b *testing.B) {
 	moves = moves[:nMoves]
 
 	for i := 0; i < b.N; i++ {
-		_ = ttt.PickMove(moves[:nMoves], startingGame2, 4)
+		_ = ttt.PickMove(moves[:nMoves], startingGame2, 6)
 	}
 }
 

@@ -263,7 +263,7 @@ func Minimax(game *Game, depth int, player Player, move Move) float64 {
 	return value
 }
 
-func PickMove(moves []Move, game *Game, depth int) Move {
+func PickMove(moves []Move, nMoves uint8, game *Game, depth int) Move {
 	// Default to first valid move.
 	choice := moves[0]
 

@@ -38,9 +38,23 @@ func Battle(self, opponent any, n int) float64 {
 // battle runs a battle between self and opponent.
 // Returns 1.0 if self won, 0.0 if opponent, and 0.5 if a tie.
 func battle(self, opponent any) float64 {
-	_ = &ttt.Game{
+	g := &ttt.Game{
 		Boards:  [3][3]*ttt.Board{{{}, {}, {}}, {{}, {}, {}}, {{}, {}, {}}},
 		Winners: &ttt.Board{},
+	}
+
+	nMoves := 81
+	moves := make([]ttt.Move, nMoves)
+	i := 0
+	for a := uint8(0); a < 3; a++ {
+		for b := uint8(0); b < 3; b++ {
+			for x := uint8(0); x < 3; x++ {
+				for y := uint8(0); y < 3; y++ {
+					moves[i] = ttt.ToMove(a, b, x, y)
+					i++
+				}
+			}
+		}
 	}
 
 	return 0.0
